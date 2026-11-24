@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>なんでもタイマー</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="なんでもタイマー">
+<meta name="theme-color" content="#2e7d32">
+<meta name="description" content="フェーズの名前と時間を決めて使える多目的タイマー。URLを開くだけ・保存はこの端末だけ。">
+<style>
+  .tab-btn.tab-shared, .btn-publish { display: none !important; }
+  .web-note { font-size: 0.85rem; color: #666; text-align: center; margin: 0.4rem auto 0.8rem; max-width: 30rem; line-height: 1.5; }
+</style>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    transition: background-color 0.8s ease;
+  }
+
+  body.phase-0  { background-color: #e8f5e9; }
+  body.phase-1  { background-color: #fff8e1; }
+  body.phase-2  { background-color: #fce4ec; }
+  body.phase-3  { background-color: #e3f2fd; }
+  body.phase-4  { background-color: #f3e5f5; }
+  body.phase-5  { background-color: #e0f7fa; }
+  body.phase-6  { background-color: #fff3e0; }
+  body.phase-7  { background-color: #e8eaf6; }
+  body.phase-8  { background-color: #f1f8e9; }
+  body.phase-9  { background-color: #fbe9e7; }
+  body.phase-end{ background-color: #ede7f6; }
+  body.setting  { background-color: #f5f5f5; }
+
+  /* ── タイマー画面 ── */
+  #timer-screen { width: 100%; text-align: center; padding: 1rem; }
+
+  #app-title {
+    font-size: clamp(1rem, 2.5vw, 1.6rem);
+    color: #888;
+    margin-bottom: 0.4em;
+    letter-spacing: 0.1em;
+  }
+
+  #phase-label {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 0.2em;
+  }
+
+  #timer {
+    font-size: clamp(6rem, 25vw, 16rem);
+    font-weight: bold;
+    color: #222;
+    letter-spacing: 0.05em;
+    line-height: 1;
+  }
+
+  #circle-wrap {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    margin: 0.5rem auto;
+  }
+  #circle-wrap svg { width: min(50vw, 300px); height: min(50vw, 300px); }
+  #circle-bg   { fill: none; stroke: #ddd; stroke-width: 10; }
+  #circle-prog { fill: none; stroke: #66bb6a; stroke-width: 10;
+                 stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+
+  #secret-icon { display: none; font-size: clamp(4rem, 15vw, 9rem); margin: 0.3em 0; }
+
+  #finish-msg {
+    font-size: clamp(2.5rem, 8vw, 6rem);
+    font-weight: bold;
+    color: #6a1b9a;
+    display: none;
+    padding: 0 1rem;
+  }
+
+  #btn-area {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  button {
+    font-size: clamp(1rem, 2.5vw, 1.6rem);
+    font-weight: bold;
+    padding: 0.6em 1.8em;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
+
+  #btn-start   { background: #43a047; color: #fff; }
+  #btn-pause   { background: #fb8c00; color: #fff; display: none; }
+  #btn-reset   { background: #757575; color: #fff; display: none; }
+  #btn-setting { background: #1e88e5; color: #fff; }
+
+  /* ── 設定画面 ── */
+  #setting-screen {
+    display: none;
+    width: 100%;
+    max-width: 640px;
+    padding: 1.5rem 1.2rem 2rem;
+  }
+
+  #setting-screen h2 {
+    font-size: 1.8rem;
+    margin-bottom: 1.2rem;
+    text-align: center;
+    color: #333;
+  }
+
+  .setting-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .setting-section > label {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #555;
+    display: block;
+    margin-bottom: 0.6rem;
+  }
+
+  .setting-section input[type="text"] {
+    width: 100%;
+    font-size: 1rem;
+    padding: 0.45em 0.8em;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }
+
+  /* プリセットボタン */
+  #preset-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .preset-btn {
+    font-size: 0.95rem;
+    font-weight: bold;
+    padding: 0.45em 1em;
+    border: 2px solid #b0bec5;
+    border-radius: 999px;
+    background: #f9f9f9;
+    color: #444;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .preset-btn:hover  { background: #e3f2fd; border-color: #1e88e5; }
+  .preset-btn.active { background: #1e88e5; border-color: #1e88e5; color: #fff; }
+
+  /* フェーズリスト */
+  #phase-list { margin-bottom: 0.5rem; }
+
+  .phase-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+    flex-wrap: wrap;
+  }
+  .phase-row .phase-num { font-weight: bold; color: #888; min-width: 1.4em; text-align: right; }
+  .phase-row input[type="text"] {
+    flex: 2; font-size: 1rem;
+    padding: 0.4em 0.7em;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    min-width: 120px;
+  }
+  .phase-row input[type="number"] {
+    width: 64px; font-size: 1rem;
+    padding: 0.4em;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .phase-row .unit { font-size: 0.9rem; color: #666; }
+  .btn-delete {
+    background: #ef5350; color: #fff;
+    border: none; border-radius: 50%;
+    width: 2em; height: 2em;
+    font-size: 1rem; cursor: pointer;
+    box-shadow: none; padding: 0; line-height: 1; flex-shrink: 0;
+  }
+
+  #btn-add-phase {
+    background: #e0e0e0; color: #444;
+    font-size: 1rem; padding: 0.4em 1.4em;
+    border-radius: 999px; border: none;
+    cursor: pointer; box-shadow: none; margin-top: 0.3rem;
+  }
+
+  .radio-group { display: flex; flex-direction: column; gap: 0.5rem; }
+  .radio-group label {
+    font-size: 1rem; font-weight: normal; color: #333;
+    display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+  }
+  .radio-group input[type="radio"] { width: 1.1em; height: 1.1em; cursor: pointer; }
+
+  #setting-btns {
+    display: flex; gap: 1rem;
+    justify-content: center;
+    margin-top: 1.2rem;
+    flex-wrap: wrap;
+  }
+  #btn-save   { background: #43a047; color: #fff; }
+  #btn-cancel { background: #757575; color: #fff; }
+
+  /* ── 保存タイマー画面 ── */
+  #btn-saved-list { background: #ff7043; color: #fff; }
+
+  #saved-screen {
+    display: none;
+    width: 100%;
+    max-width: 640px;
+    padding: 1.5rem 1.2rem 2rem;
+  }
+
+  #saved-screen h2 {
+    font-size: 1.8rem;
+    margin-bottom: 0.8rem;
+    text-align: center;
+    color: #333;
+  }
+
+  /* タブ */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.2rem;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 0.7em 0.5em;
+    font-size: 1.05rem;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    box-shadow: none;
+    border-radius: 0;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .tab-btn.tab-shared {
+    background: #e0e0e0;
+    color: #888;
+  }
+  .tab-btn.tab-shared.active {
+    background: #ff7043;
+    color: #fff;
+  }
+
+  .tab-btn.tab-mine {
+    background: #e0e0e0;
+    color: #888;
+  }
+  .tab-btn.tab-mine.active {
+    background: #1e88e5;
+    color: #fff;
+  }
+
+  .saved-empty {
+    text-align: center;
+    color: #999;
+    font-size: 1.1rem;
+    padding: 2rem 0;
+    line-height: 1.8;
+  }
+
+  .saved-item {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 0.8rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .saved-item-info {
+    flex: 1;
+    cursor: pointer;
+  }
+
+  .saved-item-name {
+    font-size: 1.15rem;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 0.3rem;
+  }
+
+  .saved-item-detail {
+    font-size: 0.85rem;
+    color: #888;
+    line-height: 1.5;
+  }
+
+  .saved-item-author {
+    font-size: 0.75rem;
+    color: #aaa;
+    margin-top: 0.2rem;
+  }
+
+  .saved-item-btns {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .btn-load {
+    background: #43a047; color: #fff;
+    font-size: 0.9rem; font-weight: bold;
+    padding: 0.4em 1em;
+    border: none; border-radius: 999px;
+    cursor: pointer; box-shadow: none;
+  }
+
+  .btn-publish {
+    background: #ff7043; color: #fff;
+    font-size: 0.8rem; font-weight: bold;
+    padding: 0.35em 0.8em;
+    border: none; border-radius: 999px;
+    cursor: pointer; box-shadow: none;
+  }
+
+  .btn-del-saved {
+    background: #ef5350; color: #fff;
+    font-size: 0.9rem; font-weight: bold;
+    padding: 0.4em 0.8em;
+    border: none; border-radius: 999px;
+    cursor: pointer; box-shadow: none;
+  }
+
+  #saved-back-btns {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.2rem;
+  }
+
+  #btn-saved-back {
+    background: #757575; color: #fff;
+  }
+
+  /* 名前をつけて保存ボタン */
+  #btn-save-as { background: #ff7043; color: #fff; }
+
+  /* ダイアログ */
+  .dialog-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .dialog-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    text-align: center;
+  }
+
+  .dialog-box h3 {
+    font-size: 1.3rem;
+    color: #333;
+    margin-bottom: 1rem;
+  }
+
+  .dialog-box input[type="text"] {
+    width: 100%;
+    font-size: 1.1rem;
+    padding: 0.6em 0.8em;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  .dialog-box input:focus {
+    outline: none;
+    border-color: #ff7043;
+  }
+
+  .dialog-btns {
+    display: flex;
+    gap: 0.8rem;
+    justify-content: center;
+  }
+
+  .dialog-btns button {
+    font-size: 1rem;
+    padding: 0.5em 1.5em;
+  }
+
+  .btn-ok     { background: #43a047; color: #fff; }
+  .btn-cancel-d { background: #757575; color: #fff; }
+
+  /* ローディング */
+  .loading-msg {
+    text-align: center;
+    color: #aaa;
+    font-size: 1rem;
+    padding: 2rem 0;
+  }
+</style>
+</head>
+<body class="phase-0">
+
+<!-- ══════ タイマー画面 ══════ -->
+<div id="timer-screen">
+  <div id="app-title">何でもタイマー</div>
+  <div id="phase-label">スタートボタンを押してね</div>
+  <div id="timer">5:00</div>
+  <div id="circle-wrap">
+    <svg viewBox="0 0 100 100">
+      <circle id="circle-bg"   cx="50" cy="50" r="44"/>
+      <circle id="circle-prog" cx="50" cy="50" r="44"
+              stroke-dasharray="276.46" stroke-dashoffset="0"
+              transform="rotate(-90 50 50)"/>
+    </svg>
+  </div>
+  <div id="secret-icon">⏳</div>
+  <div id="finish-msg">おわり！</div>
+  <div id="btn-area">
+    <button id="btn-start"   onclick="startTimer()">▶ スタート</button>
+    <button id="btn-pause"   onclick="togglePause()">⏸ 一時停止</button>
+    <button id="btn-reset"   onclick="resetTimer()">🔄 リセット</button>
+    <button id="btn-setting" onclick="openSetting()">⚙️ カスタム設定</button>
+    <button id="btn-saved-list" onclick="openSavedList()">📋 保存したタイマー</button>
+  </div>
+</div>
+
+<!-- ══════ 保存タイマー一覧画面 ══════ -->
+<div id="saved-screen">
+  <h2>📋 保存したタイマー</h2>
+
+  <!-- タブ -->
+  <div class="tab-bar">
+    <button class="tab-btn tab-shared" onclick="switchTab('shared')">🌐 みんな用</button>
+    <button class="tab-btn tab-mine active" onclick="switchTab('mine')">🔒 自分用</button>
+  </div>
+
+  <p class="web-note">保存したタイマーは この端末だけに残ります。<br>「みんな用」（URLでほかの人と共有）はGoogle版で使えます。</p>
+  <div id="saved-list"></div>
+
+  <div id="saved-back-btns">
+    <button id="btn-saved-back" onclick="closeSavedList()">← もどる</button>
+  </div>
+</div>
+
+<!-- ══════ 設定画面 ══════ -->
+<div id="setting-screen">
+  <h2>⚙️ カスタム設定</h2>
+
+  <!-- プリセット -->
+  <div class="setting-section">
+    <label>📚 プリセットから選ぶ（選ぶとフェーズが自動入力されます）</label>
+    <div id="preset-btns"></div>
+  </div>
+
+  <!-- スタートボタン文字 -->
+  <div class="setting-section">
+    <label>スタートボタンの文字</label>
+    <input type="text" id="s-btn-label" value="▶ スタート">
+  </div>
+
+  <!-- フェーズ -->
+  <div class="setting-section">
+    <label>タイマーのフェーズ（順番に進みます）</label>
+    <div id="phase-list"></div>
+    <button id="btn-add-phase" onclick="addPhaseRow()">＋ フェーズを追加</button>
+  </div>
+
+  <!-- 終了メッセージ -->
+  <div class="setting-section">
+    <label>最後に表示するメッセージ</label>
+    <input type="text" id="s-finish-msg" value="おわり！">
+  </div>
+
+  <!-- 表示モード -->
+  <div class="setting-section">
+    <label>⏱ 表示モード</label>
+    <div class="radio-group">
+      <label><input type="radio" name="disp-mode" value="number" checked>数字でカウントダウン（通常）</label>
+      <label><input type="radio" name="disp-mode" value="circle">まるアニメーション（数字なし）</label>
+      <label><input type="radio" name="disp-mode" value="secret">ひみつモード（時間を隠す）</label>
+    </div>
+  </div>
+
+  <!-- 音 -->
+  <div class="setting-section">
+    <label>🔔 音の設定</label>
+    <div class="radio-group">
+      <label><input type="radio" name="sound-mode" value="none" checked>音なし</label>
+      <label><input type="radio" name="sound-mode" value="phase">フェーズ切替のときだけ鳴らす</label>
+      <label><input type="radio" name="sound-mode" value="phase+1min">フェーズ切替＋残り1分でも鳴らす</label>
+    </div>
+  </div>
+
+  <div id="setting-btns">
+    <button id="btn-save"    onclick="saveSetting()">✅ 保存してもどる</button>
+    <button id="btn-save-as" onclick="openSaveDialog()">📋 名前をつけて保存</button>
+    <button id="btn-cancel"  onclick="closeSetting()">✖ キャンセル</button>
+  </div>
+</div>
+
+<!-- ══════ 名前をつけて保存ダイアログ ══════ -->
+<div class="dialog-overlay" id="save-dialog">
+  <div class="dialog-box">
+    <h3>📋 名前をつけて保存</h3>
+    <input type="text" id="save-name-input" placeholder="例：算数テスト用タイマー">
+    <p style="font-size:0.85rem; color:#888; margin-bottom:1rem;">
+      この端末に「自分用」として保存されます。
+    </p>
+    <div class="dialog-btns">
+      <button class="btn-ok"       onclick="confirmSaveAs()">保存する</button>
+      <button class="btn-cancel-d" onclick="closeSaveDialog()">やめる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ みんな用に公開ダイアログ ══════ -->
+<div class="dialog-overlay" id="publish-dialog">
+  <div class="dialog-box">
+    <h3>🌐 みんな用に公開</h3>
+    <p style="font-size:0.95rem; color:#555; margin-bottom:1rem;" id="publish-msg"></p>
+    <div class="dialog-btns">
+      <button class="btn-ok"       onclick="confirmPublish()">公開する</button>
+      <button class="btn-cancel-d" onclick="closePublishDialog()">やめる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.__WEB__ = true;
+(function(){
+  var KEY = 'nandemo_timer_my_v1';
+  function load(){ try{ var s = localStorage.getItem(KEY); return s ? JSON.parse(s) : []; }catch(e){ return []; } }
+  function save(v){ localStorage.setItem(KEY, JSON.stringify(v || [])); }
+  var API = {
+    getMyTimers: function(){ return load(); },
+    setMyTimers: function(t){ save(t); return true; },
+    getSharedTimers: function(){ return []; },
+    setSharedTimers: function(){ throw new Error('みんな用はGoogle版で使えます'); }
+  };
+  function runner(ok, ng){
+    var r = {
+      withSuccessHandler: function(f){ return runner(f, ng); },
+      withFailureHandler: function(f){ return runner(ok, f); }
+    };
+    Object.keys(API).forEach(function(k){
+      r[k] = function(){
+        var a = arguments;
+        setTimeout(function(){
+          try { var v = API[k].apply(null, a); if (ok) ok(v); }
+          catch(e){ if (ng) ng(e); }
+        }, 0);
+      };
+    });
+    return r;
+  }
+  window.google = { script: { run: runner(null, null) } };
+})();
+</script>
+<script>
+  // ── プリセット定義 ────────────────────────────
+  const PRESETS = [
+    {
+      id: 'free', label: '⏱️ フリー',
+      btnLabel: '▶ スタート', finishMsg: 'おわり！',
+      phases: [{ label: 'フェーズ１', minutes: 5 }]
+    },
+    {
+      id: 'kyushoku', label: '🍚 給食',
+      btnLabel: '🍚 配膳スタート', finishMsg: 'ごちそうさまでした！！',
+      phases: [
+        { label: 'いただきますまで…',        minutes: 10 },
+        { label: 'おかわりフリータイムまで…', minutes: 10 },
+        { label: '片付け準備まで…',           minutes:  3 },
+        { label: 'ごちそうさままで…',          minutes:  5 },
+      ]
+    },
+    {
+      id: 'taiiku', label: '🏃 体育',
+      btnLabel: '🏃 体育スタート', finishMsg: 'よく頑張りました！',
+      phases: [
+        { label: '準備運動まで…',   minutes:  5 },
+        { label: '活動終わりまで…', minutes: 20 },
+        { label: '整理運動まで…',   minutes:  5 },
+      ]
+    },
+    {
+      id: 'ondoku', label: '📖 音読',
+      btnLabel: '📖 音読スタート', finishMsg: 'よく読めました！',
+      phases: [
+        { label: '黙読終わりまで…', minutes: 5 },
+        { label: '音読終わりまで…', minutes: 5 },
+      ]
+    },
+    {
+      id: 'test', label: '✏️ テスト',
+      btnLabel: '✏️ テストスタート', finishMsg: 'えんぴつを置きましょう！',
+      phases: [
+        { label: '問題を解く時間まで…', minutes: 20 },
+        { label: '見直し終わりまで…',   minutes:  5 },
+      ]
+    },
+    {
+      id: 'souji', label: '🧹 そうじ',
+      btnLabel: '🧹 そうじスタート', finishMsg: 'きれいになりました！',
+      phases: [
+        { label: 'そうじ終わりまで…', minutes: 15 },
+        { label: '反省・整列まで…',   minutes:  2 },
+      ]
+    },
+    {
+      id: 'zuko', label: '🎨 図工',
+      btnLabel: '🎨 制作スタート', finishMsg: 'よくできました！',
+      phases: [
+        { label: '制作終わりまで…', minutes: 30 },
+        { label: '片付け終わりまで…', minutes:  5 },
+      ]
+    },
+    {
+      id: 'hanashiai', label: '💬 話し合い',
+      btnLabel: '💬 話し合いスタート', finishMsg: 'まとめましょう！',
+      phases: [
+        { label: '自分の考えをまとめるまで…', minutes:  5 },
+        { label: 'グループで話し合うまで…',   minutes: 10 },
+        { label: '全体発表まで…',             minutes:  5 },
+      ]
+    },
+    {
+      id: 'asa', label: '🌅 朝の会',
+      btnLabel: '🌅 朝の会スタート', finishMsg: 'よい一日を！',
+      phases: [
+        { label: '健康観察まで…', minutes: 3 },
+        { label: '連絡終わりまで…', minutes: 5 },
+        { label: 'スピーチ終わりまで…', minutes: 5 },
+      ]
+    },
+    {
+      id: 'kaeri', label: '🌇 帰りの会',
+      btnLabel: '🌇 帰りの会スタート', finishMsg: 'さようなら！',
+      phases: [
+        { label: '振り返り終わりまで…', minutes: 5 },
+        { label: '連絡終わりまで…',     minutes: 3 },
+        { label: 'さようならまで…',     minutes: 2 },
+      ]
+    },
+  ];
+
+  // ── 状態 ─────────────────────────────────────
+  let PHASES = [{ label: 'フェーズ１', minutes: 5 }];
+  const BG_CLASSES = [
+    'phase-0','phase-1','phase-2','phase-3','phase-4',
+    'phase-5','phase-6','phase-7','phase-8','phase-9'
+  ];
+
+  let startBtnLabel  = '▶ スタート';
+  let finishMsg      = 'おわり！';
+  let dispMode       = 'number';
+  let soundMode      = 'none';
+  let activePresetId = 'free';
+
+  let phaseIndex = 0;
+  let remaining  = 0;
+  let totalSecs  = 0;
+  let intervalId = null;
+  let paused     = false;
+
+  // ── 保存タイマー ─────────────────────────────
+  let sharedTimers = [];   // みんな用（ScriptProperties）
+  let myTimers     = [];   // 自分用（UserProperties）
+  let currentTab   = 'mine';
+  let publishIndex = -1;   // 公開しようとしているタイマーのindex
+
+  // ── DOM ──────────────────────────────────────
+  const elLabel         = document.getElementById('phase-label');
+  const elTimer         = document.getElementById('timer');
+  const elCircleWrap    = document.getElementById('circle-wrap');
+  const elCircleProg    = document.getElementById('circle-prog');
+  const elSecretIcon    = document.getElementById('secret-icon');
+  const elFinish        = document.getElementById('finish-msg');
+  const elStart         = document.getElementById('btn-start');
+  const elPause         = document.getElementById('btn-pause');
+  const elReset         = document.getElementById('btn-reset');
+  const elBtnSetting    = document.getElementById('btn-setting');
+  const elBtnSavedList  = document.getElementById('btn-saved-list');
+  const elTimerScreen   = document.getElementById('timer-screen');
+  const elSettingScreen = document.getElementById('setting-screen');
+  const elSavedScreen   = document.getElementById('saved-screen');
+  const elSavedList     = document.getElementById('saved-list');
+
+  const CIRCUMFERENCE = 2 * Math.PI * 44;
+
+  // ══════════════════════════════════════════════
+  //  サーバーとのやりとり
+  // ══════════════════════════════════════════════
+
+  // --- みんな用 ---
+  function loadSharedTimers(callback) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        sharedTimers = data || [];
+        if (callback) callback();
+      })
+      .withFailureHandler(function(err) {
+        console.log('みんな用の読み込み失敗:', err);
+        sharedTimers = [];
+        if (callback) callback();
+      })
+      .getSharedTimers();
+  }
+
+  function saveSharedTimers(callback) {
+    google.script.run
+      .withSuccessHandler(function() { if (callback) callback(); })
+      .withFailureHandler(function(err) { alert('みんな用の保存に失敗しました'); })
+      .setSharedTimers(sharedTimers);
+  }
+
+  // --- 自分用 ---
+  function loadMyTimers(callback) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        myTimers = data || [];
+        if (callback) callback();
+      })
+      .withFailureHandler(function(err) {
+        console.log('自分用の読み込み失敗:', err);
+        myTimers = [];
+        if (callback) callback();
+      })
+      .getMyTimers();
+  }
+
+  function saveMyTimers(callback) {
+    google.script.run
+      .withSuccessHandler(function() { if (callback) callback(); })
+      .withFailureHandler(function(err) { alert('自分用の保存に失敗しました'); })
+      .setMyTimers(myTimers);
+  }
+
+  // 起動時に両方読み込む
+  loadSharedTimers();
+  loadMyTimers();
+
+  // ══════════════════════════════════════════════
+  //  音
+  // ══════════════════════════════════════════════
+  let audioCtx = null;
+  function getCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function beep(freq, dur, vol, delay) {
+    const ctx = getCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.35;
+    const t = ctx.currentTime + (delay || 0);
+    osc.start(t); osc.stop(t + dur);
+  }
+  function playPhaseChange() {
+    if (soundMode === 'none') return;
+    beep(880, 0.12, 0.35, 0);
+    beep(1100, 0.12, 0.35, 0.18);
+    beep(1320, 0.25, 0.35, 0.36);
+  }
+  function playOneMin() {
+    if (soundMode !== 'phase+1min') return;
+    beep(660, 0.1, 0.3, 0);
+    beep(660, 0.1, 0.3, 0.2);
+  }
+  function playFinish() {
+    if (soundMode === 'none') return;
+    [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.25, 0.45, i * 0.2));
+  }
+
+  // ══════════════════════════════════════════════
+  //  表示モード
+  // ══════════════════════════════════════════════
+  function applyDispMode() {
+    elTimer.style.display      = dispMode === 'number' ? 'block' : 'none';
+    elCircleWrap.style.display = dispMode === 'circle' ? 'flex'  : 'none';
+    elSecretIcon.style.display = dispMode === 'secret' ? 'block' : 'none';
+  }
+
+  function updateCircle() {
+    if (dispMode !== 'circle') return;
+    const ratio  = totalSecs > 0 ? remaining / totalSecs : 0;
+    const offset = CIRCUMFERENCE * (1 - ratio);
+    elCircleProg.style.strokeDashoffset = offset;
+    elCircleProg.style.stroke =
+      ratio > 0.3 ? '#66bb6a' : ratio > 0.1 ? '#ffa726' : '#ef5350';
+  }
+
+  // ══════════════════════════════════════════════
+  //  タイマー動作
+  // ══════════════════════════════════════════════
+  function fmt(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function startPhase(index) {
+    phaseIndex = index;
+    remaining  = PHASES[index].minutes * 60;
+    totalSecs  = remaining;
+    document.body.className = BG_CLASSES[index % BG_CLASSES.length];
+    elLabel.textContent     = PHASES[index].label;
+    elTimer.textContent     = fmt(remaining);
+    elCircleProg.style.strokeDashoffset = 0;
+    updateCircle();
+    clearInterval(intervalId);
+    intervalId = setInterval(tick, 1000);
+  }
+
+  function tick() {
+    if (paused) return;
+    remaining--;
+    elTimer.textContent = fmt(remaining);
+    updateCircle();
+    if (remaining === 60) playOneMin();
+    if (remaining <= 0) { clearInterval(intervalId); nextPhase(); }
+  }
+
+  function nextPhase() {
+    const next = phaseIndex + 1;
+    if (next < PHASES.length) {
+      playPhaseChange();
+      startPhase(next);
+    } else {
+      playFinish();
+      document.body.className    = 'phase-end';
+      elLabel.style.display      = 'none';
+      elTimer.style.display      = 'none';
+      elCircleWrap.style.display = 'none';
+      elSecretIcon.style.display = 'none';
+      elFinish.textContent       = finishMsg;
+      elFinish.style.display     = 'block';
+      elPause.style.display      = 'none';
+      elReset.style.display      = 'inline-block';
+    }
+  }
+
+  function startTimer() {
+    getCtx();
+    elStart.style.display        = 'none';
+    elPause.style.display        = 'inline-block';
+    elReset.style.display        = 'inline-block';
+    elBtnSetting.style.display   = 'none';
+    elBtnSavedList.style.display = 'none';
+    applyDispMode();
+    playPhaseChange();
+    startPhase(0);
+  }
+
+  function togglePause() {
+    paused = !paused;
+    elPause.textContent = paused ? '▶ 再開' : '⏸ 一時停止';
+  }
+
+  function resetTimer() {
+    clearInterval(intervalId);
+    paused = false;
+    document.body.className      = 'phase-0';
+    elLabel.style.display        = '';
+    elFinish.style.display       = 'none';
+    elLabel.textContent          = 'スタートボタンを押してね';
+    elTimer.textContent          = fmt(PHASES[0].minutes * 60);
+    elCircleProg.style.strokeDashoffset = 0;
+    elTimer.style.display        = dispMode === 'number' ? 'block' : 'none';
+    elCircleWrap.style.display   = 'none';
+    elSecretIcon.style.display   = 'none';
+    elStart.style.display        = 'inline-block';
+    elPause.style.display        = 'none';
+    elPause.textContent          = '⏸ 一時停止';
+    elReset.style.display        = 'none';
+    elBtnSetting.style.display   = 'inline-block';
+    elBtnSavedList.style.display = 'inline-block';
+  }
+
+  // ══════════════════════════════════════════════
+  //  設定画面
+  // ══════════════════════════════════════════════
+  function buildPresetBtns() {
+    const wrap = document.getElementById('preset-btns');
+    wrap.innerHTML = '';
+    PRESETS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn' + (p.id === activePresetId ? ' active' : '');
+      btn.textContent = p.label;
+      btn.onclick = () => applyPreset(p.id);
+      wrap.appendChild(btn);
+    });
+  }
+
+  function applyPreset(id) {
+    const preset = PRESETS.find(p => p.id === id);
+    if (!preset) return;
+    activePresetId = id;
+    PHASES = preset.phases.map(p => ({ ...p }));
+    document.getElementById('s-btn-label').value  = preset.btnLabel;
+    document.getElementById('s-finish-msg').value = preset.finishMsg;
+    renderPhaseList();
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent === preset.label);
+    });
+  }
+
+  function openSetting() {
+    document.getElementById('s-btn-label').value  = startBtnLabel;
+    document.getElementById('s-finish-msg').value = finishMsg;
+    document.querySelector(`input[name="disp-mode"][value="${dispMode}"]`).checked  = true;
+    document.querySelector(`input[name="sound-mode"][value="${soundMode}"]`).checked = true;
+    buildPresetBtns();
+    renderPhaseList();
+    elTimerScreen.style.display   = 'none';
+    elSettingScreen.style.display = 'block';
+    document.body.className       = 'setting';
+  }
+
+  function closeSetting() {
+    elSettingScreen.style.display = 'none';
+    elTimerScreen.style.display   = 'block';
+    document.body.className       = 'phase-0';
+  }
+
+  function renderPhaseList() {
+    const list = document.getElementById('phase-list');
+    list.innerHTML = '';
+    PHASES.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'phase-row';
+      row.innerHTML = `
+        <span class="phase-num">${i + 1}.</span>
+        <input type="text"   class="p-label" value="${escHtml(p.label)}" placeholder="表示テキスト">
+        <input type="number" class="p-min"   value="${p.minutes}" min="1" max="999">
+        <span class="unit">分</span>
+        <button class="btn-delete" onclick="deletePhaseRow(${i})"
+          ${PHASES.length === 1 ? 'disabled style="opacity:0.3"' : ''}>✕</button>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function syncPhasesFromForm() {
+    document.querySelectorAll('#phase-list .phase-row').forEach((row, i) => {
+      PHASES[i].label   = row.querySelector('.p-label').value.trim() || PHASES[i].label;
+      PHASES[i].minutes = parseInt(row.querySelector('.p-min').value) || 1;
+    });
+  }
+
+  function addPhaseRow() {
+    syncPhasesFromForm();
+    if (PHASES.length >= 10) { alert('フェーズは最大10個までです'); return; }
+    PHASES.push({ label: '新しいフェーズ…', minutes: 5 });
+    renderPhaseList();
+  }
+
+  function deletePhaseRow(index) {
+    syncPhasesFromForm();
+    if (PHASES.length <= 1) return;
+    PHASES.splice(index, 1);
+    renderPhaseList();
+  }
+
+  function saveSetting() {
+    syncPhasesFromForm();
+    startBtnLabel = document.getElementById('s-btn-label').value.trim() || '▶ スタート';
+    finishMsg     = document.getElementById('s-finish-msg').value.trim() || 'おわり！';
+    dispMode      = document.querySelector('input[name="disp-mode"]:checked').value;
+    soundMode     = document.querySelector('input[name="sound-mode"]:checked').value;
+    elStart.textContent   = startBtnLabel;
+    elTimer.textContent   = fmt(PHASES[0].minutes * 60);
+    elTimer.style.display = dispMode === 'number' ? 'block' : 'none';
+    closeSetting();
+  }
+
+  // ══════════════════════════════════════════════
+  //  名前をつけて保存（自分用に保存）
+  // ══════════════════════════════════════════════
+  function openSaveDialog() {
+    syncPhasesFromForm();
+    document.getElementById('save-name-input').value = '';
+    document.getElementById('save-dialog').style.display = 'flex';
+    document.getElementById('save-name-input').focus();
+  }
+
+  function closeSaveDialog() {
+    document.getElementById('save-dialog').style.display = 'none';
+  }
+
+  function collectCurrentSetting() {
+    return {
+      btnLabel:  document.getElementById('s-btn-label').value.trim() || '▶ スタート',
+      finishMsg: document.getElementById('s-finish-msg').value.trim() || 'おわり！',
+      dispMode:  document.querySelector('input[name="disp-mode"]:checked').value,
+      soundMode: document.querySelector('input[name="sound-mode"]:checked').value,
+      phases:    PHASES.map(p => ({ label: p.label, minutes: p.minutes })),
+    };
+  }
+
+  function confirmSaveAs() {
+    const name = document.getElementById('save-name-input').value.trim();
+    if (!name) { alert('名前を入力してください'); return; }
+
+    const existIndex = myTimers.findIndex(t => t.name === name);
+    if (existIndex >= 0) {
+      if (!confirm('「' + name + '」はすでにあります。上書きしますか？')) return;
+      myTimers.splice(existIndex, 1);
+    }
+
+    const setting = collectCurrentSetting();
+    setting.name    = name;
+    setting.savedAt = new Date().toLocaleString('ja-JP');
+
+    myTimers.push(setting);
+
+    saveMyTimers(function() {
+      closeSaveDialog();
+      alert('「' + name + '」を自分用に保存しました！');
+    });
+  }
+
+  document.getElementById('save-name-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') confirmSaveAs();
+  });
+
+  // ══════════════════════════════════════════════
+  //  みんな用に公開
+  // ══════════════════════════════════════════════
+  function openPublishDialog(index) {
+    publishIndex = index;
+    const t = myTimers[index];
+    document.getElementById('publish-msg').textContent =
+      '「' + t.name + '」をみんな用に公開しますか？\nURLを知っている人なら誰でも使えるようになります。';
+    document.getElementById('publish-dialog').style.display = 'flex';
+  }
+
+  function closePublishDialog() {
+    document.getElementById('publish-dialog').style.display = 'none';
+    publishIndex = -1;
+  }
+
+  function confirmPublish() {
+    if (publishIndex < 0) return;
+    const t = myTimers[publishIndex];
+
+    // 同名チェック
+    const existIndex = sharedTimers.findIndex(s => s.name === t.name);
+    if (existIndex >= 0) {
+      sharedTimers.splice(existIndex, 1);
+    }
+
+    // コピーしてみんな用に追加
+    const copy = JSON.parse(JSON.stringify(t));
+    copy.savedAt = new Date().toLocaleString('ja-JP');
+    sharedTimers.push(copy);
+
+    saveSharedTimers(function() {
+      closePublishDialog();
+      alert('「' + t.name + '」をみんな用に公開しました！');
+      // タブをみんな用に切り替えて表示
+      switchTab('shared');
+    });
+  }
+
+  // ══════════════════════════════════════════════
+  //  保存タイマー一覧
+  // ══════════════════════════════════════════════
+  function openSavedList() {
+    // 最新データを読み込んでから表示
+    elTimerScreen.style.display = 'none';
+    elSavedScreen.style.display = 'block';
+    document.body.className     = 'setting';
+    elSavedList.innerHTML       = '<div class="loading-msg">読み込み中...</div>';
+
+    loadSharedTimers(function() {
+      loadMyTimers(function() {
+        renderSavedList();
+      });
+    });
+  }
+
+  function closeSavedList() {
+    elSavedScreen.style.display = 'none';
+    elTimerScreen.style.display = 'block';
+    document.body.className     = 'phase-0';
+  }
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelector('.tab-btn.tab-shared').classList.toggle('active', tab === 'shared');
+    document.querySelector('.tab-btn.tab-mine').classList.toggle('active', tab === 'mine');
+    renderSavedList();
+  }
+
+  function renderSavedList() {
+    const list    = currentTab === 'shared' ? sharedTimers : myTimers;
+    const isMine  = currentTab === 'mine';
+
+    elSavedList.innerHTML = '';
+
+    if (list.length === 0) {
+      if (isMine) {
+        elSavedList.innerHTML = '<div class="saved-empty">まだ自分用のタイマーはありません。<br>⚙️ カスタム設定 →「名前をつけて保存」<br>で作れます。</div>';
+      } else {
+        elSavedList.innerHTML = '<div class="saved-empty">まだみんな用のタイマーはありません。<br>自分用に保存してから<br>「みんな用に公開」できます。</div>';
+      }
+      return;
+    }
+
+    list.forEach((t, i) => {
+      const totalMin    = t.phases.reduce((sum, p) => sum + p.minutes, 0);
+      const phaseNames  = t.phases.map(p => p.label).join(' → ');
+
+      const item = document.createElement('div');
+      item.className = 'saved-item';
+
+      let btnsHtml = '<button class="btn-load" onclick="loadSavedTimer(\'' + currentTab + '\',' + i + ')">使う</button>';
+
+      if (isMine) {
+        // 自分用：公開ボタンと削除ボタン
+        btnsHtml += '<button class="btn-publish" onclick="openPublishDialog(' + i + ')">🌐 公開</button>';
+        btnsHtml += '<button class="btn-del-saved" onclick="deleteSavedTimer(\'' + currentTab + '\',' + i + ')">削除</button>';
+      } else {
+        // みんな用：削除ボタン
+        btnsHtml += '<button class="btn-del-saved" onclick="deleteSavedTimer(\'' + currentTab + '\',' + i + ')">削除</button>';
+      }
+
+      item.innerHTML = `
+        <div class="saved-item-info" onclick="loadSavedTimer('${currentTab}',${i})">
+          <div class="saved-item-name">${escHtml(t.name)}</div>
+          <div class="saved-item-detail">
+            ${t.phases.length}フェーズ ・ 合計${totalMin}分<br>
+            ${escHtml(phaseNames)}
+          </div>
+        </div>
+        <div class="saved-item-btns">
+          ${btnsHtml}
+        </div>
+      `;
+      elSavedList.appendChild(item);
+    });
+  }
+
+  function loadSavedTimer(tab, index) {
+    const list = tab === 'shared' ? sharedTimers : myTimers;
+    const t = list[index];
+    if (!t) return;
+
+    PHASES        = t.phases.map(p => ({ ...p }));
+    startBtnLabel = t.btnLabel;
+    finishMsg     = t.finishMsg;
+    dispMode      = t.dispMode;
+    soundMode     = t.soundMode;
+
+    elStart.textContent   = startBtnLabel;
+    elTimer.textContent   = fmt(PHASES[0].minutes * 60);
+    elTimer.style.display = dispMode === 'number' ? 'block' : 'none';
+    elLabel.textContent   = '「' + t.name + '」を読み込みました';
+
+    closeSavedList();
+  }
+
+  function deleteSavedTimer(tab, index) {
+    const list = tab === 'shared' ? sharedTimers : myTimers;
+    const name = list[index].name;
+    if (!confirm('「' + name + '」を削除しますか？')) return;
+    list.splice(index, 1);
+
+    const saveFn = tab === 'shared' ? saveSharedTimers : saveMyTimers;
+    saveFn(function() {
+      renderSavedList();
+    });
+  }
+</script>
+<script>
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});}catch(e){}
+if('serviceWorker' in navigator && location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}}
+</script>
+</body>
+</html>
